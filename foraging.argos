@@ -65,7 +65,7 @@
       <position method="uniform" min="-4,-4,0" max="4,4,0" />
       <orientation method="uniform" min="0,0,0" max="360,0,0" />
       <!-- You can play with the number of foraging robots by changing the ’quantity’ attribute -->
-      <entity quantity="10" max_trials="100" base_num="1">
+      <entity quantity="20" max_trials="100" base_num="1">
         <foot-bot id="fb" omnidirectional_camera_aperture="80" rab_range="1.5" >
           <controller config="controller" />
         </foot-bot>
