@@ -24,6 +24,7 @@ robot_states = {
     i_am_dest = false,
     part_of_chain = false,
     contest = false,
+    exploring = false,
 }
 
 robot_vars = {
@@ -39,7 +40,9 @@ robot_vars = {
 
 chain_vars = {
     reference_robot = '',
-    reference_angle = 0
+    reference_angle = 0,
+    reference_distance = 100,
+    MAX_DISTANCE = 100
 }
 
 -- Initialization function, executed when the 'execute' button is pressed
@@ -90,8 +93,7 @@ function check_omnidirectional_camera()
     local closest_ref = 1000000
     local index_ref = 0
 
-    for i = 1, #robot.colored_blob_omnidirectional_camera do
-        local blob = robot.colored_blob_omnidirectional_camera[i]
+    for i, blob in ipairs(robot.colored_blob_omnidirectional_camera) do
 
         robot_vars.source_present = robot_vars.source_present or is_source_or_contest(blob)
         robot_vars.dest_present = robot_vars.dest_present or is_dest_or_contest(blob)
@@ -121,19 +123,37 @@ function check_omnidirectional_camera()
     end
 end
 
+function check_chain_with_camera(color_to_check)
+    for i, blob in ipairs(robot.colored_blob_omnidirectional_camera) do
+        if blob.distance < chain_vars.MAX_DISTANCE and is_color(blob, color_to_check) then
+            chain_vars.reference_robot = color_to_check
+            chain_vars.reference_angle = blob.angle
+            return true
+        end
+    end
+    return false
+end
+
 function process_robot_reference()
-    if chain_vars.reference_robot == COLORS.SOURCE then
+    if chain_vars.reference_robot == COLORS.SOURCE or chain_vars.reference_robot == COLORS.CHAIN3 then
         -- Check for chain 1 
+        if check_chain_with_camera(COLORS.CHAIN1) then
+            process_robot_reference()
+        end
     elseif chain_vars.reference_robot == COLORS.CHAIN1 then
         -- Check for chain 2 
+        if check_chain_with_camera(COLORS.CHAIN2) then
+            process_robot_reference()
+        end
     elseif chain_vars.reference_robot == COLORS.CHAIN2 then
         -- Check for chain 3 
-    elseif chain_vars.reference_robot == COLORS.CHAIN3 then  
-        -- Check for chain 1           
+        if check_chain_with_camera(COLORS.CHAIN3) then
+            process_robot_reference()
+        end
     end
 
     if math.abs(chain_vars.reference_angle) > 0.2 then 
-        robot.wheels.set_velocity(VELOCITIES.TURN, VELOCITIES.TURN) 
+        robot.wheels.set_velocity(VELOCITIES.TURN, -VELOCITIES.TURN) 
     else 
         robot.wheels.set_velocity(VELOCITIES.STRAIGHT, VELOCITIES.STRAIGHT) 
     end
@@ -184,80 +204,52 @@ function obstacle_avoidance()
     end
 end
 
--- This method will handle the robot sources line nest and destination
-function process_sources()
-    if robot_vars.on_nest then
-        -- If there is no robot as source then i'm gonna try to put myself as a source
-        if not (robot_vars.source_present) then
-            -- I'm gonna enter in a contest status
-            set_robot_leds_color(COLORS.CONTEST_SOURCE)
-            robot_vars.source_present = true
-            robot_vars.contest_steps = 100
-            robot_states.contest = true
-            robot_vars.random_number = robot.random.uniform_int(255)
-            robot.range_and_bearing.set_data(1, robot_vars.random_number)
-        else
-            if robot_states.contest then
-                robot_vars.contest_steps = robot_vars.contest_steps - 1
-                local contest_list = get_communication(1)
+-- Helper function to handle contest
+function handle_contest(contest_color, source_color, present_key, i_am_key)
+    if not (robot_vars[present_key]) then
+        -- Enter contest
+        set_robot_leds_color(contest_color)
+        robot_vars[present_key] = true
+        robot_vars.contest_steps = 100
+        robot_states.contest = true
+        robot_vars.random_number = robot.random.uniform_int(255)
+        robot.range_and_bearing.set_data(1, robot_vars.random_number)
+    else
+        if robot_states.contest then
+            robot_vars.contest_steps = robot_vars.contest_steps - 1
+            local contest_list = get_communication(1)
 
-                robot_states.i_am_source = true
-                for i, c_value in ipairs(contest_list) do
-                    if c_value > robot_vars.random_number then
-                        robot_states.i_am_source = false
-                    elseif c_value == robot_vars.random_number then
-                        random_number = robot.random.uniform_int(255)
-                        robot.range_and_bearing.set_data(1, robot_vars.random_number)
-                    end
-                end
-
-                if (robot_vars.contest_steps == 0) then
-                    set_robot_leds_color(COLORS.SOURCE)
-                    robot_states.contest = false
-                    if not robot_states.i_am_source then
-                        robot.wheels.set_velocity(VELOCITIES.STRAIGHT, VELOCITIES.STRAIGHT)
-                        set_robot_leds_color(COLORS.ZERO)
-                    end
+            robot_states[i_am_key] = true
+            for i, c_value in ipairs(contest_list) do
+                if c_value > robot_vars.random_number then
+                    robot_states[i_am_key] = false
+                elseif c_value == robot_vars.random_number then
+                    robot_vars.random_number = robot.random.uniform_int(255)
+                    robot.range_and_bearing.set_data(1, robot_vars.random_number)
                 end
             end
-        end
-    elseif robot_vars.on_dest then
-        -- If there is no robot as source then i'm gonna try to put myself as a source
-        if not (robot_vars.dest_present) then
-            -- I'm gonna enter in a contest status
-            set_robot_leds_color(COLORS.CONTEST_DEST)
-            robot_vars.dest_present = true
-            robot_vars.contest_steps = 100
-            robot_states.contest = true
-            robot_vars.random_number = robot.random.uniform_int(255)
-            robot.range_and_bearing.set_data(1, robot_vars.random_number)
-        else
-            if robot_states.contest then
-                robot_vars.contest_steps = robot_vars.contest_steps - 1
-                local contest_list = get_communication(1)
 
-                robot_states.i_am_dest = true
-                for i, c_value in ipairs(contest_list) do
-                    if c_value > robot_vars.random_number then
-                        robot_states.i_am_dest = false
-                    elseif c_value == robot_vars.random_number then
-                        robot_vars.random_number = robot.random.uniform_int(255)
-                        robot.range_and_bearing.set_data(1, robot_vars.random_number)
-                    end
-                end
-
-                if (robot_vars.contest_steps == 0) then
-                    set_robot_leds_color(COLORS.DEST)
-                    robot_states.contest = false
-                    if not robot_states.i_am_dest then
-                        robot.wheels.set_velocity(VELOCITIES.STRAIGHT, VELOCITIES.STRAIGHT)
-                        set_robot_leds_color(COLORS.ZERO)
-                    end
+            if (robot_vars.contest_steps == 0) then
+                set_robot_leds_color(source_color)
+                robot_states.contest = false
+                if not robot_states[i_am_key] then
+                    robot.wheels.set_velocity(VELOCITIES.STRAIGHT, VELOCITIES.STRAIGHT)
+                    set_robot_leds_color(COLORS.ZERO)
                 end
             end
         end
     end
 end
+
+-- This method will handle the robot sources line nest and destination
+function process_sources()
+    if robot_vars.on_nest then
+        handle_contest(COLORS.CONTEST_SOURCE, COLORS.SOURCE, 'source_present', 'i_am_source')
+    elseif robot_vars.on_dest then
+        handle_contest(COLORS.CONTEST_DEST, COLORS.DEST, 'dest_present', 'i_am_dest')
+    end
+end
+
 
 -- Function to try turning depending on the turning_right value
 function try_turn()
@@ -300,6 +292,7 @@ function reset()
     robot_states.i_am_dest = false
     robot_states.part_of_chain = false
     robot_states.contest = false
+    robot_states.exploring = false
 
     -- robot variables
     robot_vars.avoid_obstacle = false
@@ -312,6 +305,7 @@ function reset()
     --chain variables
     chain_vars.reference_robot = ''
     chain_vars.reference_angle = 0
+    chain_vars.reference_distance = 100
 
     robot.colored_blob_omnidirectional_camera.enable()
     robot.wheels.set_velocity(VELOCITIES.STRAIGHT, VELOCITIES.STRAIGHT)
