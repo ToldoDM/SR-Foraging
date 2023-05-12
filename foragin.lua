@@ -25,6 +25,7 @@ robot_states = {
     part_of_chain = false,
     contest = false,
     exploring = false,
+    turned = false,
 }
 
 robot_vars = {
@@ -41,6 +42,7 @@ robot_vars = {
 chain_vars = {
     reference_robot = '',
     reference_angle = 0,
+    exploring_angle = 0,
     reference_distance = 100,
     MAX_DISTANCE = 100
 }
@@ -107,6 +109,7 @@ function check_omnidirectional_camera()
     if index_ref ~= 0 then
         local ref_blob = robot.colored_blob_omnidirectional_camera[index_ref]
         chain_vars.reference_angle = ref_blob.angle
+        chain_vars.reference_distance = ref_blob.distance
 
         local r, g, b = get_blob_color(ref_blob)
         if is_color(ref_blob, COLORS.CHAIN1) then
@@ -119,7 +122,7 @@ function check_omnidirectional_camera()
             chain_vars.reference_robot = COLORS.SOURCE             
         end
     elseif not (robot_states.i_am_source or robot_states.i_am_dest or robot_states.contest or robot_states.part_of_chain) then
-        set_robot_leds_color(COLORS.ZERO)
+        reset_exploring()
     end
 end
 
@@ -139,6 +142,12 @@ function process_robot_reference()
         -- Check for chain 1 
         if check_chain_with_camera(COLORS.CHAIN1) then
             process_robot_reference()
+        else
+            if chain_vars.exploring_angle == 0 and chain_vars.reference_distance < 15 then 
+                chain_vars.exploring_angle = robot.random.uniform_int(100, 314)/100
+                robot_states.exploring = true
+                set_robot_leds_color(COLORS.EXPLORING)
+            end
         end
     elseif chain_vars.reference_robot == COLORS.CHAIN1 then
         -- Check for chain 2 
@@ -151,11 +160,20 @@ function process_robot_reference()
             process_robot_reference()
         end
     end
-
-    if math.abs(chain_vars.reference_angle) > 0.2 then 
-        robot.wheels.set_velocity(VELOCITIES.TURN, -VELOCITIES.TURN) 
-    else 
-        robot.wheels.set_velocity(VELOCITIES.STRAIGHT, VELOCITIES.STRAIGHT) 
+    
+    robot.wheels.set_velocity(VELOCITIES.STRAIGHT, VELOCITIES.STRAIGHT) 
+    if robot_states.exploring then
+        if not robot_states.turned then
+            if math.abs(chain_vars.reference_angle) - chain_vars.exploring_angle > 0.2 then
+                robot.wheels.set_velocity(VELOCITIES.TURN, -VELOCITIES.TURN) 
+            else
+                robot_states.turned = true  
+            end
+        end
+    else
+        if math.abs(chain_vars.reference_angle) > 0.2 then
+            robot.wheels.set_velocity(VELOCITIES.TURN, -VELOCITIES.TURN) 
+        end
     end
 end
 
@@ -285,6 +303,20 @@ function step()
     end
 end
 
+-- Function to reset all the variables connected to exploring
+function reset_exploring()
+    robot_states.exploring = false
+    robot_states.turned = false
+    robot_states.part_of_chain = false
+
+    chain_vars.reference_robot = ''
+    chain_vars.reference_angle = 0
+    chain_vars.reference_distance = 100
+    chain_vars.exploring_angle = 0
+
+    set_robot_leds_color(COLORS.ZERO)
+end
+
 -- Reset function, executed when the 'reset' button is pressed
 function reset()
     -- robot states
@@ -293,6 +325,7 @@ function reset()
     robot_states.part_of_chain = false
     robot_states.contest = false
     robot_states.exploring = false
+    robot_states.turned = false
 
     -- robot variables
     robot_vars.avoid_obstacle = false
@@ -306,6 +339,7 @@ function reset()
     chain_vars.reference_robot = ''
     chain_vars.reference_angle = 0
     chain_vars.reference_distance = 100
+    chain_vars.exploring_angle = 0
 
     robot.colored_blob_omnidirectional_camera.enable()
     robot.wheels.set_velocity(VELOCITIES.STRAIGHT, VELOCITIES.STRAIGHT)
