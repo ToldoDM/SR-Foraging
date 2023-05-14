@@ -36,58 +36,58 @@ COLORS = {
  }
  
  
- function set_robot_leds_color(color)
-    robot.leds.set_all_colors(color.r, color.g, color.b) 
- end
+function set_robot_leds_color(color)
+   robot.leds.set_all_colors(color.r, color.g, color.b) 
+end
+
+function get_blob_color(blob)
+   return blob.color.red, blob.color.green, blob.color.blue
+end
+
+function is_color(blob, color_ref)
+   local r, g, b = get_blob_color(blob)
+   return r == color_ref.r and g == color_ref.g and b == color_ref.b
+end
+
+function is_source_or_contest_or_harvest(blob)
+   return is_color(blob, COLORS.SOURCE) or is_color(blob, COLORS.CONTEST_SOURCE) or is_harvest(blob)
+end
+
+function is_harvest(blob)
+   return is_color(blob, COLORS.GOING_FOOD) or is_color(blob, COLORS.HAVE_FOOD)
+end
  
- function get_blob_color(blob)
-    return blob.color.red, blob.color.green, blob.color.blue
- end
+function check_omnidirectional_camera()
+   for i, blob in ipairs(robot.colored_blob_omnidirectional_camera) do
+      robot_vars.source_present = robot_vars.source_present or is_source_or_contest_or_harvest(blob)
+      -- If I see the source then my role is harvesting food
+      robot_states.harvest_food = robot_states.harvest_food or is_color(blob, COLORS.SOURCE) or is_harvest(blob)
+
+      if is_color(blob, COLORS.SOURCE) then
+         -- TODO stear torwards the source robot
+      end
+   end
+end
  
- function is_color(blob, color_ref)
-    local r, g, b = get_blob_color(blob)
-    return r == color_ref.r and g == color_ref.g and b == color_ref.b
- end
- 
- function is_source_or_contest_or_harvest(blob)
-    -- You see the source so go straight for food
-    -- If you see others going for food that means there is already the source
-    if is_color(blob, COLORS.SOURCE) or is_color(blob, COLORS.CONTEST_SOURCE) or is_color(blob, COLORS.GOING_FOOD) then
-       robot_states.harvest_food = true
-       return true
-    end
-    return false
- end
- 
- function check_omnidirectional_camera()
-    for i, blob in ipairs(robot.colored_blob_omnidirectional_camera) do
-          robot_vars.source_present = robot_vars.source_present or is_source_or_contest_or_harvest(blob)
- 
-       if is_color(blob, COLORS.SOURCE) then
-          -- TODO stear torwards the source robot
-       end
-    end
- end
- 
- -- Function to process ground data
- function ground_handling()
-    -- white is 1
-    -- walkable ground is 0.6
-    -- food drop is 0.2
-    -- black is 0
-    local front_left = robot.motor_ground[1].value
-    local front_right = robot.motor_ground[4].value
-    local rear_left = robot.motor_ground[2].value
-    local rear_right = robot.motor_ground[3].value
- 
-    local mean = (front_left + front_right + rear_left + rear_right) / 4
-    if not obstacle then
-        obstacle = (front_left == 0.2 or front_right == 0.2) and not (rear_right == 0.2 and rear_left == 0.2) and robot_vars.go_back_to_base
-    end
-    robot_vars.on_forbidden = front_left == 0.2 and front_right == 0.2 and (rear_right == 0.2 or rear_left == 0.2) -- At least 3 sensors are in the forbidden area
-    robot_vars.on_nest = mean == 1
-    robot_vars.on_dest = mean == 0
- end
+-- Function to process ground data
+function ground_handling()
+   -- white is 1
+   -- walkable ground is 0.6
+   -- food drop is 0.2
+   -- black is 0
+   local front_left = robot.motor_ground[1].value
+   local front_right = robot.motor_ground[4].value
+   local rear_left = robot.motor_ground[2].value
+   local rear_right = robot.motor_ground[3].value
+
+   local mean = (front_left + front_right + rear_left + rear_right) / 4
+   if not obstacle then
+      obstacle = (front_left == 0.2 or front_right == 0.2) and not (rear_right == 0.2 and rear_left == 0.2) and robot_vars.go_back_to_base
+   end
+   robot_vars.on_forbidden = front_left == 0.2 and front_right == 0.2 and (rear_right == 0.2 or rear_left == 0.2) -- At least 3 sensors are in the forbidden area
+   robot_vars.on_nest = mean == 1
+   robot_vars.on_dest = mean == 0
+end
  
  -- Function to check for obstacle using front left and right sensors
  function check_obstacle()
