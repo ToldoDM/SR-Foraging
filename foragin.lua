@@ -10,30 +10,32 @@ COLORS = {
  
  VELOCITIES = {
     STRAIGHT = 15,
+    BASE = 7.5,
     TURN = 5
  }
  
  -- Global variables
- robot_states = {
-    i_am_source = false,
-    contest = false,
-    harvest_food = false,
- }
- 
- robot_vars = {
-    avoid_obstacle = false,
-    source_present = false,
-    turning_steps = 0,
-    on_nest = false,
-    on_dest = false,
-    turning_right = false,
-    on_forbidden = false,
-    contest_steps = 0,
-    unclogging_steps = 0,
-    random_number = 0,
-    go_back_to_base = false,
-    wait_unclogging = false,
- }
+robot_states = {
+   i_am_source = false,
+   contest = false,
+   harvest_food = false,
+}
+
+robot_vars = {
+   avoid_obstacle = false,
+   source_present = false,
+   turning_steps = 0,
+   on_nest = false,
+   on_dest = false,
+   turning_right = false,
+   on_forbidden = false,
+   contest_steps = 0,
+   unclogging_steps = 0,
+   random_number = 0,
+   go_back_to_base = false,
+   wait_unclogging = false,
+   max_source_angle = 0,
+}
  
  
 function set_robot_leds_color(color)
@@ -58,6 +60,7 @@ function is_harvest(blob)
 end
  
 function check_omnidirectional_camera()
+   robot_vars.max_source_angle = 0
    for i, blob in ipairs(robot.colored_blob_omnidirectional_camera) do
       robot_vars.source_present = robot_vars.source_present or is_source_or_contest_or_harvest(blob)
       -- If I see the source then my role is harvesting food
@@ -65,6 +68,7 @@ function check_omnidirectional_camera()
 
       if is_color(blob, COLORS.SOURCE) then
          -- TODO stear torwards the source robot
+         robot_vars.max_source_angle = blob.angle
       end
    end
 end
@@ -83,6 +87,11 @@ function ground_handling()
    local mean = (front_left + front_right + rear_left + rear_right) / 4
    if not obstacle then
       obstacle = (front_left == 0.2 or front_right == 0.2) and not (rear_right == 0.2 and rear_left == 0.2) and robot_vars.go_back_to_base
+   end
+   if robot_states.i_am_source then
+      if not obstacle then
+         obstacle = (front_left == 0.6 or front_right == 0.6)
+      end
    end
    robot_vars.on_forbidden = front_left == 0.2 and front_right == 0.2 and (rear_right == 0.2 or rear_left == 0.2) -- At least 3 sensors are in the forbidden area
    robot_vars.on_nest = mean == 1
@@ -185,48 +194,70 @@ end
     end
  end
  
- function turn_towards_light()
-    local max_light_intensity = -1
-    local max_light_angle = 0
-    
-    -- Iterate over all light sensors
-    for i, sensor in ipairs(robot.light) do
-       -- If the current sensor has a higher intensity than our previous max
-       if sensor.value > max_light_intensity then
-          max_light_intensity = sensor.value
-          -- sensor.angle returns the orientation of the sensor in radians
-          max_light_angle = sensor.angle
-       end
-    end
-    
-    -- If the light is to the right of the robot
-    if math.abs(max_light_angle) > 0.2 then
-       if robot_vars.wait_unclogging then
-          robot.wheels.set_velocity(VELOCITIES.STRAIGHT, VELOCITIES.STRAIGHT)
+function turn_towards_source()   
+   -- If turn torwards the source
+   if math.abs(robot_vars.max_source_angle) > 0.2 then
+      if robot_vars.wait_unclogging then
+         robot.wheels.set_velocity(VELOCITIES.STRAIGHT, VELOCITIES.STRAIGHT)
+
+         robot_vars.unclogging_steps = robot_vars.unclogging_steps - 1
+         if robot_vars.unclogging_steps == 0 then
+            robot_vars.wait_unclogging = false
+         end
+      else
+         if robot_vars.max_source_angle > 0 then         
+            robot.wheels.set_velocity(-VELOCITIES.TURN, VELOCITIES.TURN)
+         else
+            robot.wheels.set_velocity(VELOCITIES.TURN, -VELOCITIES.TURN)
+         end
+      end     
+   else
+      robot.wheels.set_velocity(VELOCITIES.STRAIGHT, VELOCITIES.STRAIGHT)
+   end   
+end
+
+function turn_towards_light()
+   local max_light_intensity = -1
+   local max_light_angle = 0
+   
+   -- Iterate over all light sensors
+   for i, sensor in ipairs(robot.light) do
+      -- If the current sensor has a higher intensity than our previous max
+      if sensor.value > max_light_intensity then
+         max_light_intensity = sensor.value
+         -- sensor.angle returns the orientation of the sensor in radians
+         max_light_angle = sensor.angle
+      end
+   end
+   
+   -- If the light is to the right of the robot
+   if math.abs(max_light_angle) > 0.2 then
+      if robot_vars.wait_unclogging then
+         robot.wheels.set_velocity(VELOCITIES.STRAIGHT, VELOCITIES.STRAIGHT)
+
+         robot_vars.unclogging_steps = robot_vars.unclogging_steps - 1
+         if robot_vars.unclogging_steps == 0 then
+            robot_vars.wait_unclogging = false
+         end
+      else
+         if max_light_angle > 0 then         
+            robot.wheels.set_velocity(-VELOCITIES.TURN, VELOCITIES.TURN)
+         else
+            robot.wheels.set_velocity(VELOCITIES.TURN, -VELOCITIES.TURN)
+         end
+      end     
+   else
+      robot.wheels.set_velocity(VELOCITIES.STRAIGHT, VELOCITIES.STRAIGHT)
+   end   
+end
  
-          robot_vars.unclogging_steps = robot_vars.unclogging_steps - 1
-          if robot_vars.unclogging_steps == 0 then
-             robot_vars.wait_unclogging = false
-          end
-       else
-          if max_light_angle > 0 then         
-             robot.wheels.set_velocity(-VELOCITIES.TURN, VELOCITIES.TURN)
-          else
-             robot.wheels.set_velocity(VELOCITIES.TURN, -VELOCITIES.TURN)
-          end
-       end     
-    else
-       robot.wheels.set_velocity(VELOCITIES.STRAIGHT, VELOCITIES.STRAIGHT)
-    end   
- end
- 
- function harvest_or_base()
-    if robot_vars.on_dest then
-       robot_vars.go_back_to_base = true
-    elseif robot_vars.on_nest or robot_vars.on_forbidden then
-       robot_vars.go_back_to_base = false
-    end
- end
+function harvest_or_base()
+   if robot_vars.on_dest then
+      robot_vars.go_back_to_base = true
+   elseif robot_vars.on_nest or robot_vars.on_forbidden then
+      robot_vars.go_back_to_base = false
+   end
+end
  
  --[[ This function is executed every time you press the 'execute' button ]]
  function init()
@@ -245,30 +276,38 @@ end
     process_source()
     harvest_or_base()
  
-    -- ACT
-    if robot_states.i_am_source or robot_states.contest then
-       robot.wheels.set_velocity(0, 0)
-       return
-    else
-       -- Going around randomly through the arena avoiding other robots
-       if (not robot_vars.avoid_obstacle) then
-          if robot_states.harvest_food then 
-             if robot_vars.go_back_to_base then
-                -- Go randomly until you see the nest
-                set_robot_leds_color(COLORS.HAVE_FOOD)
-                robot.wheels.set_velocity(VELOCITIES.STRAIGHT, VELOCITIES.STRAIGHT)
-                -- TODO stear torwards the source robot
-             else
-                set_robot_leds_color(COLORS.GOING_FOOD)
-                turn_towards_light()          
-             end
-          else
-             robot.wheels.set_velocity(VELOCITIES.STRAIGHT, VELOCITIES.STRAIGHT)
-          end
-       else
-             try_turn()
-       end
-    end
+   -- ACT
+   if robot_states.i_am_source then
+      if (not robot_vars.avoid_obstacle) then         
+         robot.wheels.set_velocity(VELOCITIES.BASE, VELOCITIES.BASE)
+      else
+            robot_vars.turning_right = true -- Always turn in the same direction
+            try_turn()
+      end
+      return
+   elseif robot_states.contest then
+      robot.wheels.set_velocity(0, 0)
+      return      
+   else
+      -- Going around randomly through the arena avoiding other robots
+      if (not robot_vars.avoid_obstacle) then
+         if robot_states.harvest_food then 
+            if robot_vars.go_back_to_base then
+               -- Go randomly until you see the nest
+               set_robot_leds_color(COLORS.HAVE_FOOD)
+               -- Stear torwards the source robot
+               turn_towards_source()
+            else
+               set_robot_leds_color(COLORS.GOING_FOOD)
+               turn_towards_light()          
+            end
+         else
+            robot.wheels.set_velocity(VELOCITIES.STRAIGHT, VELOCITIES.STRAIGHT)
+         end
+      else
+            try_turn()
+      end
+   end
  end
        
   
@@ -280,26 +319,27 @@ end
        called. The state of sensors and actuators is reset
        automatically by ARGoS. ]]
   function reset()
-    robot_states = {
-       i_am_source = false,
-       contest = false,
-       harvest_food = false,
-    }
-    
-    robot_vars = {
-       avoid_obstacle = false,
-       source_present = false,
-       turning_steps = 0,
-       on_nest = false,
-       on_dest = false,
-       turning_right = false,
-       on_forbidden = false,
-       contest_steps = 0,
-       unclogging_steps = 0,
-       random_number = 0,
-       go_back_to_base = false,
-       wait_unclogging = false,
-    }
+   robot_states = {
+      i_am_source = false,
+      contest = false,
+      harvest_food = false,
+   }
+   
+   robot_vars = {
+      avoid_obstacle = false,
+      source_present = false,
+      turning_steps = 0,
+      on_nest = false,
+      on_dest = false,
+      turning_right = false,
+      on_forbidden = false,
+      contest_steps = 0,
+      unclogging_steps = 0,
+      random_number = 0,
+      go_back_to_base = false,
+      wait_unclogging = false,
+      max_source_angle = 0,
+   }
  
  
     robot.colored_blob_omnidirectional_camera.enable()
