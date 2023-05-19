@@ -270,11 +270,13 @@ function turn_towards_light()
 end
 
 function harvest_or_base()
-  if robot_vars.on_dest then
-     robot_vars.go_back_to_base = true
-  elseif robot_vars.on_nest or robot_vars.on_forbidden then
-     robot_vars.go_back_to_base = false
-  end
+   if robot_states.harvest_food then
+      if robot_vars.on_dest then
+         robot_vars.go_back_to_base = true
+      elseif robot_vars.on_nest or robot_vars.on_forbidden then
+         robot_vars.go_back_to_base = false
+      end
+   end
 end
 
 --[[ This function is executed every time you press the 'execute' button ]]
