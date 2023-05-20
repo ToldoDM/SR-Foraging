@@ -8,13 +8,13 @@
     <!-- To make ARGoS faster, you can set 'threads' to some number greater than 0 -->
     <system threads="6" />
     <!-- To change the random seed for each experiment repetition, you can set 'random_seed' to whatever value you like -->
-    <experiment length="1000" ticks_per_second="10" random_seed="2" />
+    <experiment length="1000" ticks_per_second="10" random_seed="0" />
   </framework>
 
   <!-- ****************** -->
   <!-- * Loop functions * -->
   <!-- ****************** -->
-  <loop_functions library="./build/libforaging" label="foraging" output="50_seed2.txt"/>
+  <loop_functions library="./build/libforaging" label="foraging" output="output.txt"/>
   <!-- *************** -->
   <!-- * Controllers * -->
   <!-- *************** -->
@@ -65,7 +65,7 @@
       <position method="uniform" min="-4,-4,0" max="4,4,0" />
       <orientation method="uniform" min="0,0,0" max="360,0,0" />
       <!-- You can play with the number of foraging robots by changing the ’quantity’ attribute -->
-      <entity quantity="50" max_trials="100" base_num="1">
+      <entity quantity="20" max_trials="100" base_num="1">
         <foot-bot id="fb" omnidirectional_camera_aperture="80" rab_range="1.5" >
           <controller config="controller" />
         </foot-bot>

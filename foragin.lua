@@ -66,20 +66,23 @@ function check_omnidirectional_camera()
   robot_vars.max_source_angle = 0
   robot_vars.color_to_see_source = false
   local source_priority = false
-  for i, blob in ipairs(robot.colored_blob_omnidirectional_camera) do
-     robot_vars.source_present = robot_vars.source_present or is_source_or_contest_or_harvest(blob)
-     -- If I see the source then my role is harvesting food
-     robot_states.harvest_food = robot_states.harvest_food or is_color(blob, COLORS.SOURCE) or is_harvest(blob)
 
-     if is_color(blob, COLORS.SOURCE) then
-        -- TODO stear torwards the source robot
-        robot_vars.max_source_angle = blob.angle
-        source_priority = true
-        robot_vars.color_to_see_source = true
-     elseif is_color(blob, COLORS.UBER_EATS) and not source_priority then
-        robot_vars.max_source_angle = blob.angle
-        robot_vars.color_to_see_source = false
-     end
+  -- Check my surroundings
+  for i, blob in ipairs(robot.colored_blob_omnidirectional_camera) do
+      -- If I see the source or other robot harvesting food then the source is present
+      robot_vars.source_present = robot_vars.source_present or is_source_or_contest_or_harvest(blob)
+      -- If I see the source or other robot harvesting food then my role is harvesting food
+      robot_states.harvest_food = robot_states.harvest_food or is_color(blob, COLORS.SOURCE) or is_harvest(blob)
+
+      -- Check for reference for stearing torwards the source or robot that sees the source
+      if is_color(blob, COLORS.SOURCE) then
+         robot_vars.max_source_angle = blob.angle
+         source_priority = true
+         robot_vars.color_to_see_source = true
+      elseif is_color(blob, COLORS.UBER_EATS) and not source_priority then
+         robot_vars.max_source_angle = blob.angle
+         robot_vars.color_to_see_source = false
+      end
   end
 end
 
@@ -95,9 +98,11 @@ function ground_handling()
   local rear_right = robot.motor_ground[3].value
 
   local mean = (front_left + front_right + rear_left + rear_right) / 4
+  -- I treat stepping on a forbidden area as avoiding a collision
   if not obstacle then
      obstacle = (front_left == 0.2 or front_right == 0.2) and not (rear_right == 0.2 and rear_left == 0.2) and robot_vars.go_back_to_base
   end
+  -- If I am the source i don't want to exit the nest
   if robot_states.i_am_source then
      if not obstacle then
         obstacle = (front_left == 0.6 or front_right == 0.6)
@@ -125,6 +130,7 @@ end
 
 -- Function to handle obstacle avoidance logic
 function obstacle_avoidance()
+   -- If I have just detect an obtacle then i choose randomly in which direction and for how long to steer
    if (not robot_vars.avoid_obstacle) then
        if (obstacle) then
            robot_vars.avoid_obstacle = true
@@ -141,7 +147,7 @@ end
 
 -- Function to try turning depending on the turning_right value
 function try_turn()
-   robot_vars.unclogging_steps = robot.random.uniform_int(10, 40)
+   robot_vars.unclogging_steps = robot.random.uniform_int(10, 40) -- This is used when is in GOING_FOOD state, as it could encounter some obstables
    robot_vars.wait_unclogging = true
    if (robot_vars.turning_right) then
        robot.wheels.set_velocity(VELOCITIES.TURN, -VELOCITIES.TURN)
@@ -158,10 +164,6 @@ function get_communication(byte_index)
    end
    return list
 end
-
--- Helper function to handle contest
-function handle_contest(contest_color, source_color, present_key, i_am_key)   
-end
   
 -- This method will handle the robot source nest
 function process_source()
@@ -172,23 +174,24 @@ function process_source()
          robot_vars.source_present = true
          robot_vars.contest_steps = 100
          robot_states.contest = true
-         robot_vars.random_number = robot.random.uniform_int(255)
-         robot.range_and_bearing.set_data(1, robot_vars.random_number)
+         robot_vars.random_number = robot.random.uniform_int(255) -- Draw a random number
+         robot.range_and_bearing.set_data(1, robot_vars.random_number) --Expose the numer to others
       else
          if robot_states.contest then
             robot_vars.contest_steps = robot_vars.contest_steps - 1
-            local contest_list = get_communication(1)
+            local contest_list = get_communication(1) -- Get contesters draw number
    
             robot_states.i_am_source = true
             for i, c_value in ipairs(contest_list) do
-               if c_value > robot_vars.random_number then
+               if c_value > robot_vars.random_number then -- Check if I have the highest value
                      robot_states.i_am_source = false
-               elseif c_value == robot_vars.random_number then
+               elseif c_value == robot_vars.random_number then -- If same highest value then draw new number
                      robot_vars.random_number = robot.random.uniform_int(255)
                      robot.range_and_bearing.set_data(1, robot_vars.random_number)
                end
             end
    
+            -- Exit the contest and auto assign role
             if (robot_vars.contest_steps == 0) then
                robot_states.contest = false
                robot.wheels.set_velocity(VELOCITIES.STRAIGHT, VELOCITIES.STRAIGHT)
@@ -204,11 +207,12 @@ function process_source()
    end
 end
 
+-- This method actually stear torward a reference robot that could be the SOURCE (nest) or the UBER_EATS state (delivering)
 function turn_towards_source()   
-  -- If turn torwards the source
+  -- If the reference angle is higher than 0.2 then stear
   if math.abs(robot_vars.max_source_angle) > 0.2 then
-     if robot_vars.wait_unclogging then
-         if robot_vars.color_to_see_source then
+     if robot_vars.wait_unclogging then -- if I'm waiting to unclog, then i just steared, so i'll go straight for a while
+         if robot_vars.color_to_see_source then -- If i see the source, I slow down
             robot.wheels.set_velocity(VELOCITIES.SEE_SOURCE, VELOCITIES.SEE_SOURCE)
          else
             robot.wheels.set_velocity(VELOCITIES.STRAIGHT, VELOCITIES.STRAIGHT)
@@ -219,14 +223,14 @@ function turn_towards_source()
             robot_vars.wait_unclogging = false
          end
      else
-        if robot_vars.max_source_angle > 0 then         
+        if robot_vars.max_source_angle > 0 then -- Stear torwards the reference robot
            robot.wheels.set_velocity(-VELOCITIES.TURN, VELOCITIES.TURN)
         else
            robot.wheels.set_velocity(VELOCITIES.TURN, -VELOCITIES.TURN)
         end
      end     
   else
-      if robot_vars.color_to_see_source then
+      if robot_vars.color_to_see_source then -- If i see the source, I slow down
          robot.wheels.set_velocity(VELOCITIES.SEE_SOURCE, VELOCITIES.SEE_SOURCE)
       else
          robot.wheels.set_velocity(VELOCITIES.STRAIGHT, VELOCITIES.STRAIGHT)
@@ -243,14 +247,13 @@ function turn_towards_light()
      -- If the current sensor has a higher intensity than our previous max
      if sensor.value > max_light_intensity then
         max_light_intensity = sensor.value
-        -- sensor.angle returns the orientation of the sensor in radians
         max_light_angle = sensor.angle
      end
   end
   
-  -- If the light is to the right of the robot
+  -- If the light angle is higher than 0.2 then stear
   if math.abs(max_light_angle) > 0.2 then
-     if robot_vars.wait_unclogging then
+     if robot_vars.wait_unclogging then -- if I'm waiting to unclog, then i just steared, so i'll go straight for a while
         robot.wheels.set_velocity(VELOCITIES.STRAIGHT, VELOCITIES.STRAIGHT)
 
         robot_vars.unclogging_steps = robot_vars.unclogging_steps - 1
@@ -258,7 +261,7 @@ function turn_towards_light()
            robot_vars.wait_unclogging = false
         end
      else
-        if max_light_angle > 0 then         
+        if max_light_angle > 0 then  -- Stear torwards the light
            robot.wheels.set_velocity(-VELOCITIES.TURN, VELOCITIES.TURN)
         else
            robot.wheels.set_velocity(VELOCITIES.TURN, -VELOCITIES.TURN)
@@ -298,14 +301,14 @@ function step()
 
   -- ACT
   if robot_states.i_am_source then
-     if (not robot_vars.avoid_obstacle) then         
+     if (not robot_vars.avoid_obstacle) then -- Go straight if there aren't obstacles
         robot.wheels.set_velocity(VELOCITIES.BASE, VELOCITIES.BASE)
      else
            robot_vars.turning_right = true -- Always turn in the same direction
            try_turn()
      end
      return
-  elseif robot_states.contest then
+  elseif robot_states.contest then -- If you are in a contest, stay were you are
      robot.wheels.set_velocity(0, 0)
      return      
   else
@@ -313,13 +316,12 @@ function step()
      if (not robot_vars.avoid_obstacle) then
         if robot_states.harvest_food then 
            if robot_vars.go_back_to_base then
-              -- Go randomly until you see the nest
-              if robot_vars.color_to_see_source then
+              if robot_vars.color_to_see_source then -- If i see the nest i change my color to UBER_EATS (delivery)
                  set_robot_leds_color(COLORS.UBER_EATS)
               else
                  set_robot_leds_color(COLORS.HAVE_FOOD)                     
               end
-              -- Stear torwards the source robot
+              -- Stear torwards the reference robot
               turn_towards_source()
            else
               set_robot_leds_color(COLORS.GOING_FOOD)
@@ -343,27 +345,28 @@ end
       called. The state of sensors and actuators is reset
       automatically by ARGoS. ]]
  function reset()
-  robot_states = {
-     i_am_source = false,
-     contest = false,
-     harvest_food = false,
-  }
-  
-  robot_vars = {
-     avoid_obstacle = false,
-     source_present = false,
-     turning_steps = 0,
-     on_nest = false,
-     on_dest = false,
-     turning_right = false,
-     on_forbidden = false,
-     contest_steps = 0,
-     unclogging_steps = 0,
-     random_number = 0,
-     go_back_to_base = false,
-     wait_unclogging = false,
-     max_source_angle = 0,
-  }
+   robot_states = {
+      i_am_source = false,
+      contest = false,
+      harvest_food = false,
+   }
+    
+   robot_vars = {
+      avoid_obstacle = false,
+      source_present = false,
+      turning_steps = 0,
+      on_nest = false,
+      on_dest = false,
+      turning_right = false,
+      on_forbidden = false,
+      contest_steps = 0,
+      unclogging_steps = 0,
+      random_number = 0,
+      go_back_to_base = false,
+      wait_unclogging = false,
+      max_source_angle = 0,
+      color_to_see_source = false,
+   }   
 
 
    robot.colored_blob_omnidirectional_camera.enable()
