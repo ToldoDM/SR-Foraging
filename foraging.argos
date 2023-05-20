@@ -8,13 +8,13 @@
     <!-- To make ARGoS faster, you can set 'threads' to some number greater than 0 -->
     <system threads="6" />
     <!-- To change the random seed for each experiment repetition, you can set 'random_seed' to whatever value you like -->
-    <experiment length="1000" ticks_per_second="10" random_seed="843371" />
+    <experiment length="1000" ticks_per_second="10" random_seed="2" />
   </framework>
 
   <!-- ****************** -->
   <!-- * Loop functions * -->
   <!-- ****************** -->
-  <loop_functions library="./build/libforaging" label="foraging" output="output.txt"/>
+  <loop_functions library="./build/libforaging" label="foraging" output="50_seed2.txt"/>
   <!-- *************** -->
   <!-- * Controllers * -->
   <!-- *************** -->
@@ -41,7 +41,7 @@
         <footbot_light implementation="rot_z_only" show_rays="false"/>
       </sensors>
       <!-- If you want to execute ARGoS with an empty script, use this syntax -->
-      <params/>
+      <params script="foragin.lua"/>
       <!-- If you want to execute ARGoS with a script preloaded, use this syntax
            Note: the preloaded script does not appear in the Lua editor! (that's a TODO) -->
       <!--params script="controller.lua" /-->
@@ -65,7 +65,7 @@
       <position method="uniform" min="-4,-4,0" max="4,4,0" />
       <orientation method="uniform" min="0,0,0" max="360,0,0" />
       <!-- You can play with the number of foraging robots by changing the ’quantity’ attribute -->
-      <entity quantity="100" max_trials="100" base_num="1">
+      <entity quantity="50" max_trials="100" base_num="1">
         <foot-bot id="fb" omnidirectional_camera_aperture="80" rab_range="1.5" >
           <controller config="controller" />
         </foot-bot>
@@ -130,7 +130,7 @@
   <!-- ****************** -->
   <!-- * Visualization * -->
   <!-- ****************** -->
-  <visualization>
+  <!--visualization>
     <qt-opengl lua_editor="true">
       <camera>
 	    <placements>
@@ -139,6 +139,7 @@
       </camera>
     </qt-opengl>
 
-  </visualization>
+  </visualization -->
+  <visualization />
 
 </argos-configuration>
