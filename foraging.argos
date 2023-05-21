@@ -130,7 +130,7 @@
   <!-- ****************** -->
   <!-- * Visualization * -->
   <!-- ****************** -->
-  <!--visualization>
+  <visualization>
     <qt-opengl lua_editor="true">
       <camera>
 	    <placements>
@@ -139,7 +139,7 @@
       </camera>
     </qt-opengl>
 
-  </visualization -->
-  <visualization />
+  </visualization>
+  <!-- visualization /-->
 
 </argos-configuration>
